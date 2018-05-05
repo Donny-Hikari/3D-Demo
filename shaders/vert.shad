@@ -1,0 +1,22 @@
+#version 330
+
+layout (location = 0) in vec4 position;
+layout (location = 1) in vec4 color;
+layout (location = 2) in vec4 normal;
+
+out vec4 vs_fs_position;
+out vec4 vs_fs_normal;
+out vec4 vs_fs_color;
+
+uniform mat4 model_rot_matrix;
+uniform mat4 model_matrix;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+
+void main(void)
+{
+    vs_fs_position = model_matrix * position;
+    vs_fs_normal = normalize(model_rot_matrix * normal);
+    vs_fs_color = color;
+    gl_Position = projection_matrix * view_matrix * model_matrix * position;
+}

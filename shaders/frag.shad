@@ -1,0 +1,48 @@
+#version 330
+
+in vec4 vs_fs_position;
+in vec4 vs_fs_normal;
+in vec4 vs_fs_color;
+
+layout (location = 0) out vec4 color;
+
+uniform vec3 view_pos;
+
+uniform int light_switch;
+uniform vec3 light_position;
+uniform vec3 light_attribute;
+uniform vec3 light_ambient;
+uniform vec3 light_diffuse;
+uniform vec3 light_specular;
+uniform float light_shininess;
+
+void main(void)
+{
+    if (light_switch <= 0)
+    {
+        color = vs_fs_color;
+    }
+    else
+    {
+        vec4 light_direction = normalize(vec4(light_position, 1.0f) - vs_fs_position);
+        float diff = max(0.0f, dot(light_direction, vs_fs_normal));
+        vec3 diffuse_effect = light_diffuse * diff;
+
+        vec4 view_direction = normalize(vec4(view_pos, 1.0f) - vs_fs_position);
+        vec4 reflect_direction = reflect(-light_direction, vs_fs_normal);
+        float spec = pow(max(0.0f, dot(view_direction, reflect_direction)), light_shininess);
+        vec3 specular_effect = light_specular * spec;
+        //vec4 middle_color = light_effect * color;
+        //vs_fs_color = light_ambient * length(vec4(1.0f, 1.0f, 1.0f, middle_color.a) - middle_color) / 1.414 + middle_color;
+
+        float distance = length(light_position - vs_fs_position.xyz);
+        float attenuation = 1.0f / (light_attribute[0] +
+                                    light_attribute[1] * distance +
+                                    light_attribute[2] * distance * distance);
+
+        //vec3 final_effect = light_ambient + (1 - light_ambient) * diffuse_effect;
+        //vec3 final_effect = diffuse_effect;
+        vec3 final_effect = light_ambient + attenuation * (diffuse_effect + specular_effect);
+        color = vec4(final_effect, 1.0f) * vs_fs_color;
+    }
+}
