@@ -16,7 +16,7 @@ using namespace vmath;
 using namespace donny;
 using namespace donny::OpenGL;
 
-const char* sWindowTitle = "Primitive Restart";
+const char* sWindowTitle = "3D Demo";
 const bool bDebug = true;
 const vec2 v2Resolution(1280, 720);
 
@@ -37,7 +37,7 @@ GLuint uLightSpecularLoc;
 GLuint uLightShininessLoc;
 
 enum { SpacecraftInd = 0, CubeInd, TrianglesInd, PyramidInd, Light0Ind, ResourcesCount}; // Resource Indecies
-enum { PlayerId = 0, CubeId, TrianglesId, PyramidId, Light0Id = 8, AllObjectsId = 9, SpacecraftId = 10, ControlsCount }; // Object Id
+enum { PlayerId = 0, CubeId, TrianglesId, PyramidId, Light0Id = 8, AllObjectsId = 9, SpacecraftId = 10, ObjectsCount }; // Object Id
 
 const vec3 v3InitPostions[] = {
 	{  0.0f,  0.0f,  0.0f }, // Player
@@ -70,7 +70,7 @@ vec2 v2LBeginPos(0.f, 0.f);
 vec2 v2RBeginPos(0.f, 0.f);
 
 uint nSelectedObject = 0;
-enum SettingsEnum { SetSpeed, SetLightAmbient, SetLightDiffuse, SetLightSpecular };
+enum SettingsEnum { SetSpeed, SetLightAmbient, SetLightDiffuse, SetLightSpecular, SetLightShininess };
 SettingsEnum nCurSettings = SetSpeed;
 
 float aspect = 0.f;
@@ -83,22 +83,17 @@ struct ObjectProperty
 	vec3 rotation = vec3(0.f, 0.f, 0.f);
 	vec4 scale = vec4(1.f, 1.f, 1.f, 1.f);
 	vec3 face = vec3(0.f, 0.f, 0.f);
-} properties[ControlsCount];
-// bool bVisibility[ControlsCount];
-// vec3 v3Translations[ControlsCount];
-// vec3 v3Rotations[ControlsCount];
-// vec4 v4GlobalScale = vec4(1.f, 1.f, 1.f, 1.f);
-// vec3 &v3GlobalRot = v3Rotations[9]; // Index 0 controls global rotation
+} properties[ObjectsCount];
 ObjectProperty &globalProperty = properties[AllObjectsId];
 mat4 m4GlobalRot;
 
 GLint iLightSwitch = 1;
 vec3 &v3LightPosition = properties[Light0Id].translation;
 vec3 v3LightAttribute = vec3(1.0f, 0.009f, 0.0032f); // constant, linear, quadratic
-vec3 v3LightAmbient = vec3(1.0f, 1.0f, 1.0f) * 0.35f;
-vec3 v3LightDiffuse = vec3(1.0f, 1.0f, 1.0f) * 6.0f;
-vec3 v3LightSpecular = vec3(1.0f, 1.0f, 1.0f) * 1.0f;
-GLfloat fLightShininess = 128;
+vec3 v3LightAmbient = vec3(1.0f, 1.0f, 1.0f) * 0.4f;
+vec3 v3LightDiffuse = vec3(1.0f, 1.0f, 1.0f) * 1.0f; // 6.0f
+vec3 v3LightSpecular = vec3(1.0f, 1.0f, 1.0f) * 0.5f; // 1.0f
+GLfloat fLightShininess = 4;
 
 vec4 v4ViewScale = vec4(1.f, 1.f, 1.f, 1.f);
 vec3 v3ViewTrans = vec3(0.f, 0.f, 0.f);
@@ -147,7 +142,7 @@ void InitSpacecraft()
 	};
 
 	static GLfloat normals[length_of_array(positions)];
-	Standard3D::calculateNormalEAO(positions, indices, normals, 4, 0xFFFF);
+	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
 	logstdout << "Spacecraft normals: " << endl;
 	for (int a = 0; a < length_of_array(normals); ++a)
 	{
@@ -249,7 +244,7 @@ void InitCube()
 	};
 
 	static GLfloat normals[length_of_array(positions)];
-	Standard3D::calculateNormalEAO(positions, indices, normals, 4, 0xFFFF);
+	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
 	logstdout << "Cube normals: " << endl;
 	for (int a = 0; a < length_of_array(normals); ++a)
 	{
@@ -345,7 +340,7 @@ void InitTriangles()
 	};
 
 	static GLfloat normals[length_of_array(positions)];
-	Standard3D::calculateNormalEAO(positions, indices, normals, 4, 0xFFFF);
+	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
 	logstdout << "Triangles normals: " << endl;
 	for (int a = 0; a < length_of_array(normals); ++a)
 	{
@@ -439,7 +434,7 @@ void InitPyramid()
 	};
 
 	static GLfloat normals[length_of_array(positions)];
-	Standard3D::calculateNormalEAO(positions, indices, normals, 4, 0xFFFF);
+	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
 	// for (int a = 0; a < length_of_array(normals); ++a)
 	// {
 	// 	if (a % 4 == 0) logstdout.println("");
@@ -516,14 +511,15 @@ void InitLight0()
 	const GLfloat fCubeAero = 1.0f;
 	static const GLfloat colors[] =
 	{
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
-		1.0f, 1.0f, 1.0f, fCubeAero,
+		// Set value over 1.0f to make sure the light is shiny
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
+		10.0f, 10.0f, 10.0f, fCubeAero,
 	};
 
 	// static const GLushort indices[] =
@@ -546,7 +542,7 @@ void InitLight0()
 	};
 
 	static GLfloat normals[length_of_array(positions)];
-	Standard3D::calculateNormalEAO(positions, indices, normals, 4, 0xFFFF);
+	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[Light0Ind]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -645,15 +641,6 @@ void Initialize()
 	InitPyramid();
 	InitLight0();
 
-	// vec4 dist = normalize(vec4(0.0f, 0.0f, 0.0f, 1.0f) - vec4(-1.0f, -1.0f, -2.0f, 1.0f));
-	// vec4 norm = vec4(normalize(vec3(-1.0f, -1.0f, 1.0f)), 1.0f);
-	// float factor = dot(dist, norm);
-	// vec4 effect = vec4(v3LightDiffuse * max(0.0f, factor), 1.0f);
-	// logstdout << "Distance: " << dist << endl;
-	// logstdout << "Normal: " << norm << endl;
-	// logstdout << "Factor: " << factor << endl;
-	// logstdout << "Effect: " << effect << endl;
-
 	// Setup
 	// glEnable(GL_CULL_FACE);
 	// glEnable(GL_DEPTH_TEST);
@@ -675,15 +662,16 @@ void DisplayFunc()
 	static float period = 5 * CLOCKS_PER_SEC;
 	static clock_t last_clock = clock();
 	static float q = 0.0f;
+	float delay = float(clock() - last_clock) / period;
 
 	auto &selectedObject = properties[nSelectedObject];
 
 	// Global rotation
 	if (bAutoRotate) {
 		float t = clock();
-		if (bRotateX) selectedObject.rotation[0] += speed * 0.5 * float(t - last_clock) / period;
-		if (bRotateY) selectedObject.rotation[1] += speed * 1 * float(t - last_clock) / period;
-		if (bRotateZ) selectedObject.rotation[2] += speed * 2 * float(t - last_clock) / period;
+		if (bRotateX) selectedObject.rotation[0] += speed * 0.5f * delay;
+		if (bRotateY) selectedObject.rotation[1] += speed * 1.0f * delay;
+		if (bRotateZ) selectedObject.rotation[2] += speed * 2.0f * delay;
 	}
 	last_clock = clock();
 
@@ -746,7 +734,7 @@ void DisplayFunc()
 
 void MovementFunc(u_char key, int x, int y)
 {
-	const float fTransSensitivity = 1.0f;
+	const float fTransSensitivity = 0.5f;
 
 	auto &selectedProperty = properties[nSelectedObject];
 	vec4 v4Movement = vec4(0.f, 0.f, 0.f, 1.f);
@@ -844,6 +832,9 @@ void KeyFunc(u_char key, int x, int y)
 	case 'i':
 		nCurSettings = SetLightSpecular;
 		break;
+	case 'j':
+		nCurSettings = SetLightShininess;
+		break;
 
 	// Turn up/down current settings
 	case 0x2B: // Faster
@@ -865,12 +856,17 @@ void KeyFunc(u_char key, int x, int y)
 			v3LightSpecular += fLightSensitivity * (0x2C - key);
 			glUniform3fv(uLightSpecularLoc, 1, v3LightSpecular);
 			break;
+		case SetLightShininess:
+			fLightShininess *= pow(2.0f, (0x2C - key));
+			glUniform1f(uLightShininessLoc, fLightShininess);
+			break;
 		}
 		if (bDebug)
 			logstdout << endl
 					  << "Ambient: " << v3LightAmbient << endl
 					  << "Diffuse: " << v3LightDiffuse << endl
-					  << "Specular: " << v3LightSpecular << endl;
+					  << "Specular: " << v3LightSpecular << endl
+					  << "Shininess: " << fLightShininess << endl;
 		break;
 
 	// Reset

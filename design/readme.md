@@ -35,6 +35,7 @@
 'j': Settings Light0 ambient
 'k': Settings Light0 diffuse
 'l': Settings Light0 specular
+'j': Settings Light0 shininess
 
 '+': Turn up current settings
 '-': Turn down current settings

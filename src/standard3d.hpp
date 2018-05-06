@@ -149,7 +149,8 @@ StandardObjectsStack StandardObject::objectsStack;
 //     }
 // }
 
-bool calculateNormalEAO(donny::vector_view<const GLfloat> positions,
+// Calculate Element Array's Normals
+bool calculateEANormals(donny::vector_view<const GLfloat> positions,
                         donny::vector_view<const GLushort> indices,
                         donny::vector_view<GLfloat> normals,
                         GLsizei stride,
@@ -164,8 +165,8 @@ bool calculateNormalEAO(donny::vector_view<const GLfloat> positions,
     for (int a = 0; a < v3Pos.size(); ++a)
     {
         v3Pos[a] = vmath::vec3(positions[a*stride],
-                             positions[a*stride+1],
-                             positions[a*stride+2]);
+                               positions[a*stride+1],
+                               positions[a*stride+2]);
     }
 
     int sign = -1;

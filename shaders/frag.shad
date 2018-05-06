@@ -1,7 +1,7 @@
 #version 330
 
-in vec4 vs_fs_position;
-in vec4 vs_fs_normal;
+in vec3 vs_fs_position;
+in vec3 vs_fs_normal;
 in vec4 vs_fs_color;
 
 layout (location = 0) out vec4 color;
@@ -24,12 +24,17 @@ void main(void)
     }
     else
     {
-        vec4 light_direction = normalize(vec4(light_position, 1.0f) - vs_fs_position);
-        float diff = max(0.0f, dot(light_direction, vs_fs_normal));
+        vec3 normal = normalize(vs_fs_normal);
+
+        vec3 light_direction = normalize(light_position - vs_fs_position);
+        float diff = max(0.0f, dot(light_direction, normal));
         vec3 diffuse_effect = light_diffuse * diff;
 
-        vec4 view_direction = normalize(vec4(view_pos, 1.0f) - vs_fs_position);
-        vec4 reflect_direction = reflect(-light_direction, vs_fs_normal);
+        vec3 view_direction = normalize(view_pos - vs_fs_position);
+        vec3 reflect_direction = reflect(-light_direction, normal);
+        // If the fragment is back towards the light, there won't be any specular.
+        if (dot(normal, -light_direction) > 0.0f)
+            reflect_direction = vec3(0.0f, 0.0f, 0.0f);
         float spec = pow(max(0.0f, dot(view_direction, reflect_direction)), light_shininess);
         vec3 specular_effect = light_specular * spec;
         //vec4 middle_color = light_effect * color;

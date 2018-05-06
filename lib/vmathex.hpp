@@ -20,6 +20,12 @@ static inline Tmat4<T> rotateXYZ(const vecN<T, 3> rotation) {
     return rotateX(rotation[0]) * rotateY(rotation[1]) * rotateZ(rotation[2]);
 }
 
+template <typename T, const int N>
+static inline vecN<T, N> reflect(const vecN<T, N> incident, const vecN<T, N> normal)
+{
+    return incident - 2.0f * dot(normal, incident) * normal;
+}
+
 template<typename CharType, typename T, const int N>
 inline donny::filesystem::file_stream<CharType>& operator<<(donny::filesystem::file_stream<CharType> &fs, vecN<T, N> v)
 {

@@ -535,24 +535,24 @@ public:
         return result;
     }
     
-    // inline vecN<T, h> operator*(const vecN<T, w>& that) const
-    // {
-    //     vecN<T, h> result(0);
+    inline vecN<T, h> operator*(const vecN<T, w>& that) const
+    {
+        vecN<T, h> result(0);
 
-    //     for (int i = 0; i < h; i++)
-    //     {
-    //         T sum(0);
+        for (int i = 0; i < h; i++)
+        {
+            T sum(0);
 
-    //         for (int n = 0; n < w; n++)
-    //         {
-    //             sum += data[n][i] * that[n];
-    //         }
+            for (int n = 0; n < w; n++)
+            {
+                sum += data[n][i] * that[n];
+            }
 
-    //         result[i] = sum;
-    //     }
+            result[i] = sum;
+        }
 
-    //     return result;
-    // }
+        return result;
+    }
 
     inline my_type& operator*=(const my_type& that)
     {
