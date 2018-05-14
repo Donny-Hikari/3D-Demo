@@ -1,10 +1,13 @@
 
 #include <ctime>
+#include <sstream>
+#include <exception>
 
 #include <GL/glew.h>
 #include <GL/glut.h>
 
 #include <donny/logger.hpp>
+#include <boost/gil/extension/io/png_io.hpp>
 
 #include "../lib/vmathex.hpp"
 #include "../lib/donny/GLShaders.hpp"
@@ -12,6 +15,7 @@
 
 #include "standard3d.hpp"
 
+using namespace std;
 using namespace vmath;
 using namespace donny;
 using namespace donny::OpenGL;
@@ -36,16 +40,19 @@ GLuint uLightDiffuseLoc;
 GLuint uLightSpecularLoc;
 GLuint uLightShininessLoc;
 
-enum { SpacecraftInd = 0, CubeInd, TrianglesInd, PyramidInd, Light0Ind, ResourcesCount}; // Resource Indecies
-enum { PlayerId = 0, CubeId, TrianglesId, PyramidId, Light0Id = 8, AllObjectsId = 9, SpacecraftId = 10, ObjectsCount }; // Object Id
+GLuint uEnableTextureLoc;
+GLuint uTextureIdLoc;
+
+enum { SpacecraftInd = 0, CubeInd, TrianglesInd, PyramidInd, Light0Ind, Board1Ind, CrystalInd, ResourcesCount }; // Resource Indecies
+enum { PlayerId = 0, CubeId, TrianglesId, PyramidId, Board1Id, CrystalId, Light0Id = 8, AllObjectsId = 9, SpacecraftId = 10, ObjectsCount }; // Object Id
 
 const vec3 v3InitPostions[] = {
 	{  0.0f,  0.0f,  0.0f }, // Player
-	{  0.0f,  0.0f, -3.0f }, // Cube
+	{  3.0f,  0.0f, -3.0f }, // Cube
 	{  0.0f,  0.0f,  16.0f }, // Triangles
 	{  3.0f, -0.5f,  0.0f }, // Pyramid
-	{  0.0f,  0.0f,  0.0f }, // 4
-	{  0.0f,  0.0f,  0.0f }, // 5
+	{ -3.0f,  0.0f,  0.0f }, // Board1
+	{  0.0f,  0.0f, -3.0f }, // Crystal
 	{  0.0f,  0.0f,  0.0f }, // 6
 	{  0.0f,  0.0f,  0.0f }, // 7
 	{ -1.0f,  2.0f,  1.0f }, // Light0
@@ -64,12 +71,14 @@ bool bRotateZ = false;
 bool bLMoving = false;
 bool bRMoving = false;
 bool bFullScreen = false;
-bool bWorldView = true;
+bool bWorldView = false;
+bool bSelectViewer = false;
 bool bTransparent = false;
 vec2 v2LBeginPos(0.f, 0.f);
 vec2 v2RBeginPos(0.f, 0.f);
 
 uint nSelectedObject = 0;
+uint nViewerObject = 0;
 enum SettingsEnum { SetSpeed, SetLightAmbient, SetLightDiffuse, SetLightSpecular, SetLightShininess };
 SettingsEnum nCurSettings = SetSpeed;
 
@@ -226,9 +235,9 @@ void InitCube()
 
 	// static const GLushort indices[] =
 	// {
-	// 	0, 1, 2, 3, 6, 7, 4, 5,         
-	// 	0xFFFF,                         
-	// 	2, 6, 0, 4, 1, 5, 3, 7          
+	// 	0, 1, 2, 3, 6, 7, 4, 5,
+	// 	0xFFFF,
+	// 	2, 6, 0, 4, 1, 5, 3, 7
 	// };
 	static const GLushort indices[] =
 	{
@@ -309,7 +318,7 @@ void DrawCube()
 const int nTrianglesElems = 8;
 void InitTriangles()
 {
-	static const GLfloat positions[] = 
+	static const GLfloat positions[] =
 	{
 		-0.3f,  0.3f,  0.0f,  1.0f, //0
 		 0.3f,  0.3f,  0.0f,  1.0f, //1
@@ -405,7 +414,7 @@ void DrawTriangles()
 const int nPyramidElems = 12;
 void InitPyramid()
 {
-	static const GLfloat positions[] = 
+	static const GLfloat positions[] =
 	{
 		 0.0f,  1.0f,  0.0f,  1.0f, //0 - top
 		-1.0f,  0.0f,  1.0f,  1.0f, //1 - left-front
@@ -524,9 +533,9 @@ void InitLight0()
 
 	// static const GLushort indices[] =
 	// {
-	// 	0, 1, 2, 3, 6, 7, 4, 5,         
-	// 	0xFFFF,                         
-	// 	2, 6, 0, 4, 1, 5, 3, 7          
+	// 	0, 1, 2, 3, 6, 7, 4, 5,
+	// 	0xFFFF,
+	// 	2, 6, 0, 4, 1, 5, 3, 7
 	// };
 	static const GLushort indices[] =
 	{
@@ -557,7 +566,7 @@ void InitLight0()
 
 	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, NULL);
 	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)sizeof(positions));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)(sizeof(positions) + sizeof(normals)));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)(sizeof(positions) + sizeof(colors)));
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
@@ -594,6 +603,264 @@ void DrawLight0()
 	glDrawElements(GL_TRIANGLE_STRIP, nCubeElems, GL_UNSIGNED_SHORT, NULL);
 }
 
+const int nBoardElems = 18;
+const int nBoardSlides = 15;
+GLuint uBoardTex[nBoardSlides];
+int nBoardCurSlide = 0;
+void InitBoard1()
+{
+	static const GLfloat positions[] =
+	{
+		-1.6f, -1.2f, -0.2f,  1.0f, //0  - left-bottom-back
+		-1.6f, -1.2f,  0.2f,  1.0f, //1  - left-bottom-front
+		-1.6f,  1.2f, -0.2f,  1.0f, //2  - left-top-back
+		-1.6f,  1.2f,  0.2f,  1.0f, //3  - left-top-front
+		 1.6f, -1.2f, -0.2f,  1.0f, //4  - right-bottom-back
+		 1.6f, -1.2f,  0.2f,  1.0f, //5  - right-bottom-front
+		 1.6f,  1.2f, -0.2f,  1.0f, //6  - right-top-back
+		 1.6f,  1.2f,  0.2f,  1.0f, //7  - right-top-front
+	};
+
+	const GLfloat fAero = 1.0f;
+	static const GLfloat colors[] =
+	{
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+		1.0f, 1.0f, 1.0f, fAero,
+	};
+
+	// static const GLushort indices[] =
+	// {
+	// 	0, 1, 2, 3, 6, 7, 4, 5,
+	// 	0xFFFF,
+	// 	2, 6, 0, 4, 1, 5, 3, 7
+	// };
+	static const GLushort indices[] =
+	{
+		// Cube
+		6, 4, 2, 0, 3, 1, 7, 5,
+		0xFFFF,
+		1, 0, 5, 4, 7, 6, 3, 2,
+		0xFFFF,
+		// 4, 6, 0, 2, 1, 3, 5, 7,
+		// 0xFFFF,
+		// 0, 1, 4, 5, 6, 7, 2, 3,
+		// 0xFFFF,
+	};
+
+	static GLfloat normals[length_of_array(positions)];
+	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
+
+	const float texWidth = 1.0f, texHeight = 1.0f;
+	static const GLfloat texCoords[] =
+	{
+		    0.0f, texHeight,
+		    0.0f, texHeight, // Left-Bottom
+		    0.0f,      0.0f,
+		    0.0f,      0.0f, // Left-Top
+		texWidth, texHeight,
+		texWidth, texHeight, // Right-Bottom
+		texWidth,      0.0f,
+		texWidth,      0.0f, // Right-Top
+	};
+
+	// Create textures
+	glGenTextures(nBoardSlides, uBoardTex);
+	glActiveTexture(GL_TEXTURE0);
+	for (int a = 0; a < nBoardSlides; ++a)
+	{
+		// images = SOIL
+		stringstream filename; filename << "board/" << a << ".png";
+		try {
+			boost::gil::rgb8_image_t img;
+			boost::gil::png_read_and_convert_image(filename.str(), img);
+			auto view = boost::gil::const_view(img);
+
+			glBindTexture(GL_TEXTURE_2D, uBoardTex[a]);
+
+			// logstdout.log( "%d, %d - %d", view.width(), view.height(), view.width() * view.height() );
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, view.width(), view.height(), 0, GL_RGB,
+				GL_UNSIGNED_BYTE, view.begin().x());
+
+			GLfloat mxTexAni; // Query for the max anisotropy
+			glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &mxTexAni);
+
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, mxTexAni);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
+
+			glGenerateMipmap(GL_TEXTURE_2D);
+		} catch (fstream::failure e) {
+			logstderr.e("Error when reading file %s: \"%s\"", filename.str().c_str(), e.what());
+		}
+	}
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[Board1Ind]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+	glBindVertexArray(VAO[Board1Ind]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[Board1Ind]);
+	glBufferData(GL_ARRAY_BUFFER, 
+		sizeof(positions) + sizeof(colors) + sizeof(normals) + sizeof(texCoords), 
+		NULL, GL_STATIC_DRAW);
+	long offset = 0;
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(positions), positions); offset += sizeof(positions);
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(colors), colors);       offset += sizeof(colors);
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(normals), normals);     offset += sizeof(normals);
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(texCoords), texCoords); offset += sizeof(texCoords);
+
+	offset = 0;
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(positions);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(colors);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(normals);
+	glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(texCoords);
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+	glEnableVertexAttribArray(3);
+
+	properties[Board1Id].translation = v3InitPostions[Board1Id];
+	properties[Board1Id].rotation = vec3(0.0f, 90.0f / 360.0f, 0.0f);
+}
+
+void DrawBoard1()
+{
+	auto &property = properties[Board1Id];
+
+	if (!property.visibility || !globalProperty.visibility) return;
+
+	// logstdout << property.rotation << endl;
+	mat4 m4ModelRot(rotateXYZ(property.rotation * 360.0f));
+	glUniformMatrix4fv(uModelRotMatrixLoc, 1, GL_FALSE, m4ModelRot);
+	mat4 m4Model(translate(property.translation) *
+				 scale(property.scale) *
+				 m4ModelRot);
+	glUniformMatrix4fv(uModelMatrixLoc, 1, GL_FALSE, m4Model);
+
+	glUniform1i(uEnableTextureLoc, 1);
+	glUniform1i(uTextureIdLoc, 0);
+
+	// Set up for a glDrawElements call
+	glBindVertexArray(VAO[Board1Ind]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[Board1Ind]);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, uBoardTex[nBoardCurSlide]);
+
+	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+
+	// When primitive restart is on, we can call one draw command
+	glEnable(GL_PRIMITIVE_RESTART);
+	glPrimitiveRestartIndex(0xFFFF);
+
+	glDrawElements(GL_TRIANGLE_STRIP, nBoardElems, GL_UNSIGNED_SHORT, NULL);
+
+	glUniform1i(uEnableTextureLoc, 0);
+}
+
+const int nCrystalElems = 20;
+void InitCrystal()
+{
+    static const GLfloat vertices[] =
+	{
+         0.000,  1.414,  0.000,  1.000f, // 0 - top
+        -1.000,  0.000,  1.000,  1.000f, // 1 - left-front
+         1.000,  0.000,  1.000,  1.000f, // 2 - right-front
+        -1.000,  0.000, -1.000,  1.000f, // 3 - left-back
+         1.000,  0.000, -1.000,  1.000f, // 4 - right-back
+         0.000, -1.414,  0.000,  1.000f, // 5 - bottom
+    };
+
+	const float fAero = 0.7f;
+	static const GLfloat colors[] = 
+	{
+		0.3f, 0.7f, 0.9f, fAero, // 0
+		0.1f, 0.3f, 0.7f, fAero, // 1
+		0.1f, 0.3f, 0.7f, fAero, // 2
+		0.1f, 0.3f, 0.7f, fAero, // 3
+		0.1f, 0.3f, 0.7f, fAero, // 4
+		0.3f, 0.7f, 0.9f, fAero, // 5		
+	};
+
+	static const GLushort indices[] =
+	{
+		0, 1, 2, 5, 0xFFFF,
+		0, 2, 4, 5, 0xFFFF,
+		0, 4, 3, 5, 0xFFFF,
+		0, 3, 1, 5, 0xFFFF,
+	};
+
+	static GLfloat normals[length_of_array(vertices)];
+	Standard3D::calculateEANormals(vertices, indices, normals, 4, 0xFFFF);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[CrystalInd]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+	glBindVertexArray(VAO[CrystalInd]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[CrystalInd]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) + sizeof(colors) + sizeof(normals), NULL, GL_STATIC_DRAW);
+	long offset = 0;
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(vertices), vertices); offset += sizeof(vertices);
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(colors), colors);     offset += sizeof(colors);
+	glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(normals), normals);   offset += sizeof(normals);
+
+	offset = 0;
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(vertices);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(colors);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)offset); offset += sizeof(normals);
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+
+	properties[CrystalId].translation = v3InitPostions[CrystalId];
+}
+
+void DrawCrystal(float delay)
+{
+	auto &property = properties[CrystalId];
+
+	if (!property.visibility || !globalProperty.visibility) return;
+
+	if (!bAutoRotate)
+		property.rotation.y() -= speed * 1.0f * delay;
+
+	mat4 m4ModelRot(m4GlobalRot *
+					rotateXYZ(property.rotation * 360.0f));
+	glUniformMatrix4fv(uModelRotMatrixLoc, 1, GL_FALSE, m4ModelRot);
+	mat4 m4Model(translate(globalProperty.translation) *
+				 translate(property.translation) *
+				 scale(globalProperty.scale) *
+				 scale(property.scale) *
+				 m4ModelRot);
+	glUniformMatrix4fv(uModelMatrixLoc, 1, GL_FALSE, m4Model);
+
+	// Set up for a glDrawElements call
+	glBindVertexArray(VAO[CrystalInd]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[CrystalInd]);
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+
+	// When primitive restart is on, we can call one draw command
+	glEnable(GL_PRIMITIVE_RESTART);
+	glPrimitiveRestartIndex(0xFFFF);
+
+	glDrawElements(GL_TRIANGLE_STRIP, nCrystalElems, GL_UNSIGNED_SHORT, NULL);
+}
+
 void Initialize()
 {
 	static const ShaderFileInfo shaderInfo[] =
@@ -623,6 +890,9 @@ void Initialize()
 	uLightSpecularLoc = glGetUniformLocation(uShaderPgm, "light_specular");
 	uLightShininessLoc = glGetUniformLocation(uShaderPgm, "light_shininess");
 
+	uEnableTextureLoc = glGetUniformLocation(uShaderPgm, "enable_texture");
+	uTextureIdLoc = glGetUniformLocation(uShaderPgm, "texture_id");
+
 	glUniform1i(uLightSwitchLoc, iLightSwitch);
 	glUniform3fv(uLightPositionLoc, 1, v3LightPosition);
 	glUniform3fv(uLightAttributeLoc, 1, v3LightAttribute);
@@ -640,6 +910,8 @@ void Initialize()
 	InitTriangles();
 	InitPyramid();
 	InitLight0();
+	InitBoard1();
+	InitCrystal();
 
 	// Setup
 	// glEnable(GL_CULL_FACE);
@@ -665,6 +937,7 @@ void DisplayFunc()
 	float delay = float(clock() - last_clock) / period;
 
 	auto &selectedObject = properties[nSelectedObject];
+	auto &viewerObject = properties[nViewerObject];
 
 	// Global rotation
 	if (bAutoRotate) {
@@ -694,10 +967,11 @@ void DisplayFunc()
 	if (bWorldView)
 		v3ViewPos = v3ViewTrans;
 	else {
-		v3ViewPos = selectedObject.translation;
-		if (nSelectedObject != AllObjectsId &&
-			nSelectedObject != SpacecraftId &&
-			nSelectedObject != Light0Id) {
+		v3ViewPos = viewerObject.translation;
+		if (nViewerObject != AllObjectsId &&
+			nViewerObject != SpacecraftId &&
+			nViewerObject != Light0Id &&
+			nViewerObject != Board1Id) {
 			v3ViewPos +=  globalProperty.translation;
 		}
 	}
@@ -708,7 +982,7 @@ void DisplayFunc()
 							rotateX(v3ViewRot[0] * 360.0f) *
 							rotateY(v3ViewRot[1] * 360.0f) *
 							rotateZ(v3ViewRot[2] * 360.0f));
-	vmath::mat4 m4ObjectView(rotateXYZ(selectedObject.face * 360.0f) *
+	vmath::mat4 m4ObjectView(rotateXYZ(viewerObject.face * 360.0f) *
 							 translate(v3ViewPos * (-1)));
 	vmath:mat4 m4View = (bWorldView) ? m4WorldView : m4ObjectView;
 	glUniformMatrix4fv(uViewMatrixLoc, 1, GL_FALSE, m4View);
@@ -722,11 +996,13 @@ void DisplayFunc()
 	// Activate simple shading program
 	glUseProgram(uShaderPgm);
 
-	DrawSpacecraft();
 	DrawTriangles();
 	DrawCube();
 	DrawPyramid();
 	DrawLight0();
+	DrawBoard1();
+	DrawCrystal(delay);
+	DrawSpacecraft();
 
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -771,19 +1047,25 @@ void MovementFunc(u_char key, int x, int y)
 	}
 }
 
+void SelectObject(u_char key, int x, int y)
+{
+	if (bSelectViewer)
+		nViewerObject = key - '0';
+	else
+		nSelectedObject = key - '0';
+}
+
 void KeyFunc(u_char key, int x, int y)
 {
 	const float fSpeedSensitivity = 0.5f;
 	const float fLightSensitivity = 0.05f;
 
 	auto &selectedProperty = properties[nSelectedObject];
+	auto &viewerProperty = properties[nViewerObject];
 
 	if (bDebug) logstdout << key << " pressed." << endl;
     switch (key)
 	{
-	// Exit
-	case 0x1B:
-        exit(0);
 	// Fullscreen
 	case 'f':
 		bFullScreen ^= 1;
@@ -794,7 +1076,10 @@ void KeyFunc(u_char key, int x, int y)
 			glutReshapeWindow(v2Resolution[0], v2Resolution[1]);
 		}
 		break;
-		
+	// Exit
+	case 0x1B:
+        exit(0);
+
 	// Movement
 	case 'd': // right
 	case 'a': // left
@@ -820,25 +1105,25 @@ void KeyFunc(u_char key, int x, int y)
 		if (bAutoRotate) bRotateZ ^= 1;
 		break;
 
-	case 'p':
+	case 'i':
 		nCurSettings = SetSpeed;
 		break;
-	case 'y':
+	case 'g':
 		nCurSettings = SetLightAmbient;
 		break;
-	case 'u':
+	case 'h':
 		nCurSettings = SetLightDiffuse;
 		break;
-	case 'i':
+	case 'j':
 		nCurSettings = SetLightSpecular;
 		break;
-	case 'j':
+	case 'k':
 		nCurSettings = SetLightShininess;
 		break;
 
 	// Turn up/down current settings
-	case 0x2B: // Faster
-	case 0x2D: // Slower
+	case '+': // Faster
+	case '-': // Slower
 		switch (nCurSettings)
 		{
 		case SetSpeed:
@@ -869,45 +1154,57 @@ void KeyFunc(u_char key, int x, int y)
 					  << "Shininess: " << fLightShininess << endl;
 		break;
 
+	// Board slide control
+	case '<':
+		nBoardCurSlide -= 1;
+		if (nBoardCurSlide < 0) nBoardCurSlide = 0;
+		logstdout << "Current board slide: " << nBoardCurSlide << endl;
+		break;
+	case '>':
+		nBoardCurSlide += 1;
+		if (nBoardCurSlide >= nBoardSlides) nBoardCurSlide = nBoardSlides - 1;
+		logstdout << "Current board slide: " << nBoardCurSlide << endl;
+		break;
+
 	// Reset
-	case 'r': // Reset viewer's or selected objects' rotation(/face) and position
+	case 'r': // Reset world viewer position and rotation or selected viewer's face
 		if (bWorldView) {
 			v3ViewRot = vec3(0.f, 0.f, 0.f);
 			v3ViewTrans = vec3(0.f, 0.f ,0.f);
 		} else {
-			selectedProperty.face = vec3(0.f, 0.f, 0.f);
-			selectedProperty.translation = v3InitPostions[nSelectedObject];
+			viewerProperty.face = vec3(0.f, 0.f, 0.f);
 		}
 		break;
-	case 'g': // Reset selected objects' rotations
+	case 't': // Reset selected objects' rotations
 		selectedProperty.rotation = vec3(0.f, 0.f, 0.f);
 		break;
-	case 'h': // Reset selected objects' scale level
+	case 'y': // Reset selected objects' scale level
 		selectedProperty.scale = vec4(1.f, 1.f, 1.f, 1.f);
+		break;
+	case 'u':
+		selectedProperty.translation = v3InitPostions[nSelectedObject];
 		break;
 
 	// Select object(s)
 	case '0': // Player
-		nSelectedObject = 0;
-		break;
 	case '1': // Cube
-		nSelectedObject = 1;
-		break;
 	case '2': // Triangles
-		nSelectedObject = 2;
-		break;
 	case '3': // Pyramid
-		nSelectedObject = 3;
-		break;
+	case '4': // Board1
+	case '5':
+	// case '6':
+	// case '7':
 	case '8': // Light0
-		nSelectedObject = 8;
-		break;
 	case '9': // Select all objects (except Spacecraft)
-		nSelectedObject = 9;
+		SelectObject(key, x, y);
 		break;
 
 	case 'o': // World view mode
 		bWorldView ^= true;
+		break;
+	case 'p':
+		bSelectViewer ^= true;
+		logstdout << "SelectViewer: " << bSelectViewer << endl;
 		break;
 
 	case 'v': // Visibility
@@ -920,23 +1217,30 @@ void KeyFunc(u_char key, int x, int y)
 		break;
 
 	// Transparency - deprecated
-	case 't':
-		bTransparent ^= 1;
-		if (bTransparent) {
-			glDisable(GL_CULL_FACE);
-			glDisable(GL_DEPTH_TEST);
+	// case 't':
+	// 	bTransparent ^= 1;
+	// 	if (bTransparent) {
+	// 		glDisable(GL_CULL_FACE);
+	// 		glDisable(GL_DEPTH_TEST);
 
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		} else {
-			glEnable(GL_CULL_FACE);
-			glEnable(GL_DEPTH_TEST);
-			glDisable(GL_BLEND);
-		}
-		break;
+	// 		glEnable(GL_BLEND);
+	// 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// 	} else {
+	// 		glEnable(GL_CULL_FACE);
+	// 		glEnable(GL_DEPTH_TEST);
+	// 		glDisable(GL_BLEND);
+	// 	}
+	// 	break;
 	}
 
-	logstdout << "Selected: " << nSelectedObject << endl
+	logstdout << "Selected Viewer: " << nViewerObject << endl
+			<< "Position: " << viewerProperty.translation << endl
+			<< "Rotation: " << viewerProperty.rotation << endl
+			<< "Scale: " << viewerProperty.scale << endl
+			<< "Face: " << viewerProperty.face << endl
+			<< endl;
+
+	logstdout << "Selected Object: " << nSelectedObject << endl
 			<< "Position: " << selectedProperty.translation << endl
 			<< "Rotation: " << selectedProperty.rotation << endl
 			<< "Scale: " << selectedProperty.scale << endl
@@ -980,17 +1284,18 @@ void MotionFunc(int x, int y)
 	const float fRotSensitivity = 0.001;
 
 	auto &selectedProperty = properties[nSelectedObject];
+	auto &viewerProperty = properties[nViewerObject];
 
 	// if (bDebug)
 	// 	logstdout << "Motion: " << x << ", " << y << endl;
-	
+
 	if (bLMoving) {
-		vec3 &v3CurRot = (bWorldView) ? v3ViewRot : selectedProperty.face;
+		vec3 &v3CurRot = (bWorldView) ? v3ViewRot : viewerProperty.face;
 		v3CurRot[1] += fRotSensitivity * (x - v2LBeginPos[0]);
 		v3CurRot[0] += fRotSensitivity * (y - v2LBeginPos[1]);
 		v2LBeginPos = vec2(x, y);
 	}
-	
+
 	if (bRMoving) {
 		selectedProperty.rotation[1] += fRotSensitivity * (x - v2RBeginPos[0]);
 		selectedProperty.rotation[0] += fRotSensitivity * (y - v2RBeginPos[1]);
@@ -1007,10 +1312,12 @@ void ReshapeFunc(int width, int height)
 int main(int argc, char** argv)
 {
     glutInit(&argc, argv);
+
     glutInitWindowSize(v2Resolution[0], v2Resolution[1]);
     glutInitWindowPosition(10, 10);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
     glutCreateWindow(sWindowTitle);
+	glutHideWindow();
 
 	glewExperimental = GL_TRUE;
 	glewInit();
@@ -1023,9 +1330,11 @@ int main(int argc, char** argv)
 
 	Initialize();
 
+	glutShowWindow();
+
 	glutMainLoop();
 
 	Finalize();
-	
+
 	return 0;
 }

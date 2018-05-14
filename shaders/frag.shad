@@ -3,8 +3,9 @@
 in vec3 vs_fs_position;
 in vec3 vs_fs_normal;
 in vec4 vs_fs_color;
+in vec2 vs_fs_texCoord;
 
-layout (location = 0) out vec4 color;
+layout (location = 0) out vec4 fs_color;
 
 uniform vec3 view_pos;
 
@@ -16,11 +17,14 @@ uniform vec3 light_diffuse;
 uniform vec3 light_specular;
 uniform float light_shininess;
 
+uniform int enable_texture;
+uniform sampler2D texture_id;
+
 void main(void)
 {
     if (light_switch <= 0)
     {
-        color = vs_fs_color;
+        fs_color = vs_fs_color;
     }
     else
     {
@@ -31,13 +35,15 @@ void main(void)
         vec3 diffuse_effect = light_diffuse * diff;
 
         vec3 view_direction = normalize(view_pos - vs_fs_position);
-        vec3 reflect_direction = reflect(-light_direction, normal);
+        vec3 reflect_direction;
         // If the fragment is back towards the light, there won't be any specular.
         if (dot(normal, -light_direction) > 0.0f)
             reflect_direction = vec3(0.0f, 0.0f, 0.0f);
+        else
+            reflect_direction = reflect(-light_direction, normal);
         float spec = pow(max(0.0f, dot(view_direction, reflect_direction)), light_shininess);
         vec3 specular_effect = light_specular * spec;
-        //vec4 middle_color = light_effect * color;
+        //vec4 middle_color = light_effect * fs_color;
         //vs_fs_color = light_ambient * length(vec4(1.0f, 1.0f, 1.0f, middle_color.a) - middle_color) / 1.414 + middle_color;
 
         float distance = length(light_position - vs_fs_position.xyz);
@@ -48,6 +54,9 @@ void main(void)
         //vec3 final_effect = light_ambient + (1 - light_ambient) * diffuse_effect;
         //vec3 final_effect = diffuse_effect;
         vec3 final_effect = light_ambient + attenuation * (diffuse_effect + specular_effect);
-        color = vec4(final_effect, 1.0f) * vs_fs_color;
+        if (enable_texture == 1)
+            fs_color = vec4(final_effect, 1.0f) * texture(texture_id, vs_fs_texCoord);
+        else
+            fs_color = vec4(final_effect, 1.0f) * vs_fs_color;
     }
 }

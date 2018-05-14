@@ -1,9 +1,11 @@
 
 BINDIR = bin
 SRCDIR = src
-BIN    = $(BINDIR)/prpr
+BIN    = $(BINDIR)/3d-demo
 SRC    = $(SRCDIR)/*.cpp
-CFLAGS = -lGL -lGLU -lglut -lGLEW --std=c++11
+CFLAGS = --std=c++11 \
+		 -lGL -lGLU -lglut -lGLEW \
+		 $(shell pkg-config --cflags --libs boost-1.66)
 
 .PHONY: build run clean
 
@@ -15,4 +17,4 @@ run:
 	cd $(BINDIR) && ./$(notdir $(BIN))
 
 clean:
-	rm $(BIN)
+	rm -f $(BIN)
