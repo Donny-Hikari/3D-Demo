@@ -18,7 +18,7 @@ template <const bool cond>
 class ensure
 {
 public:
-    inline ensure() { switch (false) { case false: case cond: break; } }
+    inline ensure() { switch ((int)false) { case (int)false: case (int)cond: break; } }
 };
 
 template <typename T, const int len> class vecN;

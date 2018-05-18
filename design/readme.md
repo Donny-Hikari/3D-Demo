@@ -11,6 +11,11 @@
 'q': Move up
 'e': Move down
 
+'up': Camera turn up
+'down': Camera turn down
+'left': Camera turn left
+'right': Camera turn right
+
 'm': Turn on/off auto-rotate
 'x': Enable/Disable auto-rotate on axis X
 'c': Enable/Disable auto-rotate on axis Y
@@ -43,8 +48,10 @@
 '+': Turn up current settings
 '-': Turn down current settings
 
-'<': Previous board slide
-'>': Next board slide
+'<'|',': Previous board slide
+'>'|'.': Next board slide
+
+'b': Change skybox textures
 
 'l': Trigger Light0 switch
 

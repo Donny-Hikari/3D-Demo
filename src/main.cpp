@@ -21,8 +21,9 @@ using namespace donny;
 using namespace donny::OpenGL;
 
 const char* sWindowTitle = "3D Demo";
-const bool bDebug = true;
-const vec2 v2Resolution(1280, 720);
+const bool bDebug = false;
+vec2 v2WndPosition;
+const vec2 v2WndResolution(1280, 720);
 
 GLuint uShaderPgm;
 
@@ -40,19 +41,20 @@ GLuint uLightDiffuseLoc;
 GLuint uLightSpecularLoc;
 GLuint uLightShininessLoc;
 
-GLuint uEnableTextureLoc;
+GLuint uTextureModeLoc;
 GLuint uTextureIdLoc;
+GLuint uTextureCubeIdLoc;
 
 enum { SpacecraftInd = 0, CubeInd, TrianglesInd, PyramidInd, Light0Ind, Board1Ind, CrystalInd, ResourcesCount }; // Resource Indecies
 enum { PlayerId = 0, CubeId, TrianglesId, PyramidId, Board1Id, CrystalId, Light0Id = 8, AllObjectsId = 9, SpacecraftId = 10, ObjectsCount }; // Object Id
 
 const vec3 v3InitPostions[] = {
-	{  0.0f,  0.0f,  0.0f }, // Player
+	{  0.0f,  0.0f,  1.0f }, // Player
 	{  3.0f,  0.0f, -3.0f }, // Cube
-	{  0.0f,  0.0f,  16.0f }, // Triangles
+	{  0.0f,  0.0f,  8.0f }, // Triangles
 	{  3.0f, -0.5f,  0.0f }, // Pyramid
-	{ -3.0f,  0.0f,  0.0f }, // Board1
-	{  0.0f,  0.0f, -3.0f }, // Crystal
+	{  0.0f,  0.0f, -3.0f }, // Board1
+	{ -3.0f,  0.0f, -3.0f }, // Crystal
 	{  0.0f,  0.0f,  0.0f }, // 6
 	{  0.0f,  0.0f,  0.0f }, // 7
 	{ -1.0f,  2.0f,  1.0f }, // Light0
@@ -74,6 +76,7 @@ bool bFullScreen = false;
 bool bWorldView = false;
 bool bSelectViewer = false;
 bool bTransparent = false;
+bool bIgnoreKeyRepeat = false;
 vec2 v2LBeginPos(0.f, 0.f);
 vec2 v2RBeginPos(0.f, 0.f);
 
@@ -99,9 +102,9 @@ mat4 m4GlobalRot;
 GLint iLightSwitch = 1;
 vec3 &v3LightPosition = properties[Light0Id].translation;
 vec3 v3LightAttribute = vec3(1.0f, 0.009f, 0.0032f); // constant, linear, quadratic
-vec3 v3LightAmbient = vec3(1.0f, 1.0f, 1.0f) * 0.4f;
-vec3 v3LightDiffuse = vec3(1.0f, 1.0f, 1.0f) * 1.0f; // 6.0f
-vec3 v3LightSpecular = vec3(1.0f, 1.0f, 1.0f) * 0.5f; // 1.0f
+vec3 v3LightAmbient = vec3(1.0f, 1.0f, 1.0f) * 0.30f;
+vec3 v3LightDiffuse = vec3(1.0f, 1.0f, 1.0f) * 0.60f; // 6.0f
+vec3 v3LightSpecular = vec3(1.0f, 1.0f, 1.0f) * 0.35f; // 1.0f
 GLfloat fLightShininess = 4;
 
 vec4 v4ViewScale = vec4(1.f, 1.f, 1.f, 1.f);
@@ -109,19 +112,22 @@ vec3 v3ViewTrans = vec3(0.f, 0.f, 0.f);
 vec3 v3ViewRot = vec3(0.f, 0.f, 0.f);
 
 const int nSpacecraftElems = 18;
+const int nSpacecraftTextures = 3;
+GLuint uSpacecraftTex[nSpacecraftTextures];
+int nSpacecraftCurTex = 0;
 void InitSpacecraft()
 {
-	const vec3 Geometry = vec3(100.f, 100.f, 100.f);
+	const vec3 Geometry = vec3(256.0f, 256.0f, 256.0f);
 	static const GLfloat positions[] =
 	{
-		-Geometry.x(), -Geometry.y(), -Geometry.z(),  1.0f, //0  - left-bottom-back
-		-Geometry.x(), -Geometry.y(),  Geometry.z(),  1.0f, //1  - left-bottom-front
-		-Geometry.x(),  Geometry.y(), -Geometry.z(),  1.0f, //2  - left-top-back
-		-Geometry.x(),  Geometry.y(),  Geometry.z(),  1.0f, //3  - left-top-front
-		 Geometry.x(), -Geometry.y(), -Geometry.z(),  1.0f, //4  - right-bottom-back
-		 Geometry.x(), -Geometry.y(),  Geometry.z(),  1.0f, //5  - right-bottom-front
-		 Geometry.x(),  Geometry.y(), -Geometry.z(),  1.0f, //6  - right-top-back
-		 Geometry.x(),  Geometry.y(),  Geometry.z(),  1.0f, //7  - right-top-front
+		-Geometry.x(), -Geometry.y(), -Geometry.z(),  1.0f, // 0 - left-bottom-back
+		-Geometry.x(), -Geometry.y(),  Geometry.z(),  1.0f, // 1 - left-bottom-front
+		-Geometry.x(),  Geometry.y(), -Geometry.z(),  1.0f, // 2 - left-top-back
+		-Geometry.x(),  Geometry.y(),  Geometry.z(),  1.0f, // 3 - left-top-front
+		 Geometry.x(), -Geometry.y(), -Geometry.z(),  1.0f, // 4 - right-bottom-back
+		 Geometry.x(), -Geometry.y(),  Geometry.z(),  1.0f, // 5 - right-bottom-front
+		 Geometry.x(),  Geometry.y(), -Geometry.z(),  1.0f, // 6 - right-top-back
+		 Geometry.x(),  Geometry.y(),  Geometry.z(),  1.0f, // 7 - right-top-front
 	};
 
 	const GLfloat fSpacecraftAero = 1.0f;
@@ -152,11 +158,65 @@ void InitSpacecraft()
 
 	static GLfloat normals[length_of_array(positions)];
 	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
-	logstdout << "Spacecraft normals: " << endl;
-	for (int a = 0; a < length_of_array(normals); ++a)
+	// logstdout << "Spacecraft normals: " << endl;
+	// for (int a = 0; a < length_of_array(normals); ++a)
+	// {
+	// 	logstdout.print("%f ", normals[a]);
+	// 	if (a % 4 == 3) logstdout.println("");
+	// }
+
+	static const string texPath = "skybox";
+	static const string texFilenames[] =
 	{
-		logstdout.print("%f ", normals[a]);
-		if (a % 4 == 3) logstdout.println("");
+		"right.png",
+		"left.png",
+		"top.png",
+		"bottom.png",
+		"back.png",
+		"front.png",
+	};
+	static const string texPackages[] =
+	{
+		"plateau",
+		"city",
+		"illusion",
+	};
+
+	glGenTextures(nSpacecraftTextures, uSpacecraftTex);
+	for (int b = 0; b < nSpacecraftTextures; ++b)
+	{
+		glActiveTexture(GL_TEXTURE1 + b);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, uSpacecraftTex[b]);
+
+		for (int a = 0; a < length_of_array(texFilenames); ++a)
+		{
+			stringstream filename; filename << texPath << '/' << texPackages[b] << '/' << texFilenames[a];
+			try {
+				boost::gil::rgb8_image_t img;
+				boost::gil::png_read_and_convert_image(filename.str(), img);
+				auto view = boost::gil::const_view(img);
+
+				glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + a,
+					0, GL_RGB, view.width(), view.height(), 0, GL_RGB,
+					GL_UNSIGNED_BYTE, view.begin().x());
+			} catch (fstream::failure e) {
+				logstderr.e("Error when reading file %s: \"%s\"",
+					texFilenames[a].c_str(), e.what());
+			}
+		}
+
+		GLfloat mxTexAni; // Query for the max anisotropy
+		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &mxTexAni);
+
+		glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_ANISOTROPY_EXT, mxTexAni);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
+
+		glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 	}
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[SpacecraftInd]);
@@ -178,6 +238,7 @@ void InitSpacecraft()
 	glEnableVertexAttribArray(2);
 
 	properties[SpacecraftId].translation = v3InitPostions[SpacecraftId];
+	logstdout.v() << "Spacecraft loaded." << endl;
 }
 
 void DrawSpacecraft()
@@ -190,10 +251,15 @@ void DrawSpacecraft()
 				 scale(property.scale));
 	glUniformMatrix4fv(uModelMatrixLoc, 1, GL_FALSE, m4Model);
 
+	glUniform1i(uTextureModeLoc, 2);
+	glUniform1i(uTextureCubeIdLoc, 1+nSpacecraftCurTex);
+
 	// Set up for a glDrawElements call
 	glBindVertexArray(VAO[SpacecraftInd]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[SpacecraftInd]);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, uSpacecraftTex[nSpacecraftCurTex]);
 
+	glEnable(GL_TEXTURE_CUBE_MAP);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -203,6 +269,14 @@ void DrawSpacecraft()
 	glPrimitiveRestartIndex(0xFFFF);
 
 	glDrawElements(GL_TRIANGLE_STRIP, nSpacecraftElems, GL_UNSIGNED_SHORT, NULL);
+
+	glUniform1i(uTextureModeLoc, 0);
+}
+
+void InitPlayer()
+{
+	auto &property = properties[PlayerId];
+	property.translation = v3InitPostions[PlayerId];
 }
 
 const int nCubeElems = 18;
@@ -254,12 +328,12 @@ void InitCube()
 
 	static GLfloat normals[length_of_array(positions)];
 	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
-	logstdout << "Cube normals: " << endl;
-	for (int a = 0; a < length_of_array(normals); ++a)
-	{
-		logstdout.print("%f ", normals[a]);
-		if (a % 4 == 3) logstdout.println("");
-	}
+	// logstdout << "Cube normals: " << endl;
+	// for (int a = 0; a < length_of_array(normals); ++a)
+	// {
+	// 	logstdout.print("%f ", normals[a]);
+	// 	if (a % 4 == 3) logstdout.println("");
+	// }
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[CubeInd]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -280,6 +354,8 @@ void InitCube()
 	glEnableVertexAttribArray(2);
 
 	properties[CubeId].translation = v3InitPostions[CubeId];
+
+	logstdout.v() << "Cube loaded." << endl;
 }
 
 void DrawCube()
@@ -350,12 +426,12 @@ void InitTriangles()
 
 	static GLfloat normals[length_of_array(positions)];
 	Standard3D::calculateEANormals(positions, indices, normals, 4, 0xFFFF);
-	logstdout << "Triangles normals: " << endl;
-	for (int a = 0; a < length_of_array(normals); ++a)
-	{
-		logstdout.print("%f ", normals[a]);
-		if (a % 4 == 3) logstdout.println("");
-	}
+	// logstdout << "Triangles normals: " << endl;
+	// for (int a = 0; a < length_of_array(normals); ++a)
+	// {
+	// 	logstdout.print("%f ", normals[a]);
+	// 	if (a % 4 == 3) logstdout.println("");
+	// }
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[TrianglesInd]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -376,6 +452,8 @@ void InitTriangles()
 	glEnableVertexAttribArray(2);
 
 	properties[TrianglesId].translation = v3InitPostions[TrianglesId];
+
+	logstdout.v() << "Hexagram loaded." << endl;
 }
 
 void DrawTriangles()
@@ -469,6 +547,8 @@ void InitPyramid()
 	glEnableVertexAttribArray(2);
 
 	properties[PyramidId].translation = v3InitPostions[PyramidId];
+
+	logstdout.v() << "Pyramid loaded." << endl;
 }
 
 void DrawPyramid()
@@ -573,6 +653,8 @@ void InitLight0()
 
 	properties[Light0Id].translation = v3InitPostions[Light0Id];
 	properties[Light0Id].scale = vec4(0.1f, 0.1f, 0.1f, 1.0f);
+
+	logstdout.v() << "Light0 loaded." << endl;
 }
 
 void DrawLight0()
@@ -604,9 +686,9 @@ void DrawLight0()
 }
 
 const int nBoardElems = 18;
-const int nBoardSlides = 15;
+const int nBoardSlides = 18;
 GLuint uBoardTex[nBoardSlides];
-int nBoardCurSlide = 0;
+int nBoardCurSlide = 4;
 void InitBoard1()
 {
 	static const GLfloat positions[] =
@@ -682,6 +764,7 @@ void InitBoard1()
 			auto view = boost::gil::const_view(img);
 
 			glBindTexture(GL_TEXTURE_2D, uBoardTex[a]);
+			// glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
 			// logstdout.log( "%d, %d - %d", view.width(), view.height(), view.width() * view.height() );
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, view.width(), view.height(), 0, GL_RGB,
@@ -692,14 +775,15 @@ void InitBoard1()
 
 			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, mxTexAni);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
 
 			glGenerateMipmap(GL_TEXTURE_2D);
 		} catch (fstream::failure e) {
-			logstderr.e("Error when reading file %s: \"%s\"", filename.str().c_str(), e.what());
+			logstderr.e("Error when reading file %s: \"%s\"",
+				filename.str().c_str(), e.what());
 		}
 	}
 
@@ -729,7 +813,9 @@ void InitBoard1()
 	glEnableVertexAttribArray(3);
 
 	properties[Board1Id].translation = v3InitPostions[Board1Id];
-	properties[Board1Id].rotation = vec3(0.0f, 90.0f / 360.0f, 0.0f);
+	// properties[Board1Id].rotation = vec3(0.0f, 90.0f / 360.0f, 0.0f);
+
+	logstdout.v() << "Board1 loaded." << endl;
 }
 
 void DrawBoard1()
@@ -739,14 +825,17 @@ void DrawBoard1()
 	if (!property.visibility || !globalProperty.visibility) return;
 
 	// logstdout << property.rotation << endl;
-	mat4 m4ModelRot(rotateXYZ(property.rotation * 360.0f));
+	mat4 m4ModelRot(m4GlobalRot *
+					rotateXYZ(property.rotation * 360.0f));
 	glUniformMatrix4fv(uModelRotMatrixLoc, 1, GL_FALSE, m4ModelRot);
-	mat4 m4Model(translate(property.translation) *
+	mat4 m4Model(translate(globalProperty.translation) *
+				 translate(property.translation) *
+				 scale(globalProperty.scale) *
 				 scale(property.scale) *
 				 m4ModelRot);
 	glUniformMatrix4fv(uModelMatrixLoc, 1, GL_FALSE, m4Model);
 
-	glUniform1i(uEnableTextureLoc, 1);
+	glUniform1i(uTextureModeLoc, 1);
 	glUniform1i(uTextureIdLoc, 0);
 
 	// Set up for a glDrawElements call
@@ -766,7 +855,7 @@ void DrawBoard1()
 
 	glDrawElements(GL_TRIANGLE_STRIP, nBoardElems, GL_UNSIGNED_SHORT, NULL);
 
-	glUniform1i(uEnableTextureLoc, 0);
+	glUniform1i(uTextureModeLoc, 0);
 }
 
 const int nCrystalElems = 20;
@@ -825,6 +914,8 @@ void InitCrystal()
 	glEnableVertexAttribArray(2);
 
 	properties[CrystalId].translation = v3InitPostions[CrystalId];
+
+	logstdout.v() << "Crystal loaded." << endl;
 }
 
 void DrawCrystal(float delay)
@@ -833,7 +924,7 @@ void DrawCrystal(float delay)
 
 	if (!property.visibility || !globalProperty.visibility) return;
 
-	if (!bAutoRotate)
+	if (!bAutoRotate || nSelectedObject != CrystalId)
 		property.rotation.y() -= speed * 1.0f * delay;
 
 	mat4 m4ModelRot(m4GlobalRot *
@@ -869,6 +960,8 @@ void Initialize()
 		{ GL_FRAGMENT_SHADER, "../shaders/frag.shad" }
 	};
 
+	logstdout.v() << "Loading..." << endl;
+
 	uShaderPgm = LoadShaders(shaderInfo);
 	glUseProgram(uShaderPgm);
 
@@ -890,8 +983,9 @@ void Initialize()
 	uLightSpecularLoc = glGetUniformLocation(uShaderPgm, "light_specular");
 	uLightShininessLoc = glGetUniformLocation(uShaderPgm, "light_shininess");
 
-	uEnableTextureLoc = glGetUniformLocation(uShaderPgm, "enable_texture");
+	uTextureModeLoc = glGetUniformLocation(uShaderPgm, "texture_mode");
 	uTextureIdLoc = glGetUniformLocation(uShaderPgm, "texture_id");
+	uTextureCubeIdLoc = glGetUniformLocation(uShaderPgm, "texture_cube_id");
 
 	glUniform1i(uLightSwitchLoc, iLightSwitch);
 	glUniform3fv(uLightPositionLoc, 1, v3LightPosition);
@@ -906,6 +1000,7 @@ void Initialize()
 	glGenBuffers(ResourcesCount, VBO);  // Set up the vertex array buffer
 
 	InitSpacecraft();
+	InitPlayer();
 	InitCube();
 	InitTriangles();
 	InitPyramid();
@@ -918,6 +1013,8 @@ void Initialize()
 	// glEnable(GL_DEPTH_TEST);
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+	logstdout.v() << "Initialize done." << endl;
 }
 
 void Finalize()
@@ -933,7 +1030,6 @@ void DisplayFunc()
 {
 	static float period = 5 * CLOCKS_PER_SEC;
 	static clock_t last_clock = clock();
-	static float q = 0.0f;
 	float delay = float(clock() - last_clock) / period;
 
 	auto &selectedObject = properties[nSelectedObject];
@@ -948,12 +1044,10 @@ void DisplayFunc()
 	}
 	last_clock = clock();
 
-	if (bDebug) {
-		// logstdout << "Global Rotation: "
-		// 		<< selectedObject.rotation[0] << " "
-		// 		<< selectedObject.rotation[1] << " "
-		// 		<< selectedObject.rotation[2] << endl;
-	}
+	// logstdout.d() << "Global Rotation: "
+	// 		<< selectedObject.rotation[0] << " "
+	// 		<< selectedObject.rotation[1] << " "
+	// 		<< selectedObject.rotation[2] << endl;
 
 	m4GlobalRot = rotateX(globalProperty.rotation[0] * 360.0f) *
 				  rotateY(globalProperty.rotation[1] * 360.0f) *
@@ -970,8 +1064,7 @@ void DisplayFunc()
 		v3ViewPos = viewerObject.translation;
 		if (nViewerObject != AllObjectsId &&
 			nViewerObject != SpacecraftId &&
-			nViewerObject != Light0Id &&
-			nViewerObject != Board1Id) {
+			nViewerObject != Light0Id) {
 			v3ViewPos +=  globalProperty.translation;
 		}
 	}
@@ -996,13 +1089,13 @@ void DisplayFunc()
 	// Activate simple shading program
 	glUseProgram(uShaderPgm);
 
+	DrawSpacecraft();
 	DrawTriangles();
 	DrawCube();
 	DrawPyramid();
 	DrawLight0();
 	DrawBoard1();
 	DrawCrystal(delay);
-	DrawSpacecraft();
 
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -1049,10 +1142,29 @@ void MovementFunc(u_char key, int x, int y)
 
 void SelectObject(u_char key, int x, int y)
 {
-	if (bSelectViewer)
+	auto &selectedProperty = properties[nSelectedObject];
+	auto &viewerProperty = properties[nViewerObject];
+
+	if (bSelectViewer) {
 		nViewerObject = key - '0';
-	else
+
+		logstdout.i() << "Selected Viewer: " << nViewerObject << endl
+				<< "Position: " << viewerProperty.translation << endl
+				<< "Rotation: " << viewerProperty.rotation << endl
+				<< "Scale: " << viewerProperty.scale << endl
+				<< "Face: " << viewerProperty.face << endl
+				<< endl;
+	}
+	else {
 		nSelectedObject = key - '0';
+
+		logstdout.i() << "Selected Object: " << nSelectedObject << endl
+				<< "Position: " << selectedProperty.translation << endl
+				<< "Rotation: " << selectedProperty.rotation << endl
+				<< "Scale: " << selectedProperty.scale << endl
+				<< "Face: " << selectedProperty.face << endl
+				<< endl;
+	}
 }
 
 void KeyFunc(u_char key, int x, int y)
@@ -1063,7 +1175,7 @@ void KeyFunc(u_char key, int x, int y)
 	auto &selectedProperty = properties[nSelectedObject];
 	auto &viewerProperty = properties[nViewerObject];
 
-	if (bDebug) logstdout << key << " pressed." << endl;
+	logstdout.d() << key << " pressed." << endl;
     switch (key)
 	{
 	// Fullscreen
@@ -1072,8 +1184,8 @@ void KeyFunc(u_char key, int x, int y)
 		if (bFullScreen)
 			glutFullScreen();
 		else {
-			glutPositionWindow(0, 0);
-			glutReshapeWindow(v2Resolution[0], v2Resolution[1]);
+			glutPositionWindow(v2WndPosition[0], v2WndPosition[1]);
+			glutReshapeWindow(v2WndResolution[0], v2WndResolution[1]);
 		}
 		break;
 	// Exit
@@ -1093,7 +1205,7 @@ void KeyFunc(u_char key, int x, int y)
 	// Auto-rotate
 	case 'm': // Enable/Disable auto-rotate
 		bAutoRotate ^= 1;
-		logstdout << "Auto-rotate changed to: " << bAutoRotate << endl;
+		logstdout.i() << "Auto-rotate changed to: " << bAutoRotate << endl;
 		break;
 	case 'x': // Enable/Disable auto-rotate on x axis
 		if (bAutoRotate) bRotateX ^= 1;
@@ -1146,24 +1258,25 @@ void KeyFunc(u_char key, int x, int y)
 			glUniform1f(uLightShininessLoc, fLightShininess);
 			break;
 		}
-		if (bDebug)
-			logstdout << endl
-					  << "Ambient: " << v3LightAmbient << endl
-					  << "Diffuse: " << v3LightDiffuse << endl
-					  << "Specular: " << v3LightSpecular << endl
-					  << "Shininess: " << fLightShininess << endl;
+		logstdout.i() << endl
+				<< "Ambient: " << v3LightAmbient << endl
+				<< "Diffuse: " << v3LightDiffuse << endl
+				<< "Specular: " << v3LightSpecular << endl
+				<< "Shininess: " << fLightShininess << endl;
 		break;
 
 	// Board slide control
 	case '<':
+	case ',':
 		nBoardCurSlide -= 1;
 		if (nBoardCurSlide < 0) nBoardCurSlide = 0;
-		logstdout << "Current board slide: " << nBoardCurSlide << endl;
+		logstdout.i() << "Current board slide: " << nBoardCurSlide << endl;
 		break;
+	case '.':
 	case '>':
 		nBoardCurSlide += 1;
 		if (nBoardCurSlide >= nBoardSlides) nBoardCurSlide = nBoardSlides - 1;
-		logstdout << "Current board slide: " << nBoardCurSlide << endl;
+		logstdout.i() << "Current board slide: " << nBoardCurSlide << endl;
 		break;
 
 	// Reset
@@ -1204,11 +1317,16 @@ void KeyFunc(u_char key, int x, int y)
 		break;
 	case 'p':
 		bSelectViewer ^= true;
-		logstdout << "SelectViewer: " << bSelectViewer << endl;
+		logstdout.i() << "SelectViewer: " << bSelectViewer << endl;
 		break;
 
 	case 'v': // Visibility
 		selectedProperty.visibility ^= true;
+		break;
+
+	case 'b':
+		nSpacecraftCurTex = (nSpacecraftCurTex + 1) % nSpacecraftTextures;
+		logstdout.i() << "Current skybox texture: " << nSpacecraftCurTex << endl;
 		break;
 
 	case 'l':
@@ -1232,27 +1350,47 @@ void KeyFunc(u_char key, int x, int y)
 	// 	}
 	// 	break;
 	}
+}
 
-	logstdout << "Selected Viewer: " << nViewerObject << endl
-			<< "Position: " << viewerProperty.translation << endl
-			<< "Rotation: " << viewerProperty.rotation << endl
-			<< "Scale: " << viewerProperty.scale << endl
-			<< "Face: " << viewerProperty.face << endl
-			<< endl;
+void SpecialFunc(int key, int x, int y)
+{
+	const float fRotSensitivity = 0.001;
+	const float fKeySensitivity = 10.0f;
 
-	logstdout << "Selected Object: " << nSelectedObject << endl
-			<< "Position: " << selectedProperty.translation << endl
-			<< "Rotation: " << selectedProperty.rotation << endl
-			<< "Scale: " << selectedProperty.scale << endl
-			<< "Face: " << selectedProperty.face << endl
-			<< endl;
+	auto &viewerProperty = properties[nViewerObject];
+	
+	float xOff = 0, yOff = 0;
+	switch (key)
+	{
+	case GLUT_KEY_UP:
+		yOff -= fKeySensitivity;
+		break;
+	case GLUT_KEY_DOWN:
+		yOff += fKeySensitivity;
+		break;
+	case GLUT_KEY_LEFT:
+		xOff -= fKeySensitivity;
+		break;
+	case GLUT_KEY_RIGHT:
+		xOff += fKeySensitivity;
+		break;
+	case GLUT_KEY_F1:
+		bIgnoreKeyRepeat ^= true;
+		glutIgnoreKeyRepeat(bIgnoreKeyRepeat);
+		break;
+	}
+	// logstdout.d() << "Special key lifted. Key: " << key
+	// 			 << " (xOff, yOff): " << xOff << ',' << yOff << endl;
+
+	vec3 &v3CurRot = (bWorldView) ? v3ViewRot : viewerProperty.face;
+	v3CurRot[1] += fRotSensitivity * xOff;
+	v3CurRot[0] += fRotSensitivity * yOff;
 }
 
 void MouseFunc(int button, int state, int x, int y)
 {
-	// if (bDebug)
-	// 	logstdout << "Button: " << button << "; State: " << state
-	// 			  << "; (x, y): " << x << ", " << y << endl;
+	// logstdout.d() << "Button: " << button << "; State: " << state
+	// 		<< "; (x, y): " << x << ", " << y << endl;
 	auto &selectedProperty = properties[nSelectedObject];
 
 	switch (button)
@@ -1272,11 +1410,7 @@ void MouseFunc(int button, int state, int x, int y)
 		selectedProperty.scale -= selectedProperty.scale * 0.1;
 		break;
 	}
-	// logstdout << selectedProperty.scale[0] << ' '
-	// 		  << selectedProperty.scale[1] << ' '
-	// 		  << selectedProperty.scale[2] << ' '
-	// 		  << selectedProperty.scale[3]
-	// 		  << endl;
+	// logstdout.d() << "Scale of selected object: " << selectedProperty.scale << endl;
 }
 
 void MotionFunc(int x, int y)
@@ -1286,8 +1420,7 @@ void MotionFunc(int x, int y)
 	auto &selectedProperty = properties[nSelectedObject];
 	auto &viewerProperty = properties[nViewerObject];
 
-	// if (bDebug)
-	// 	logstdout << "Motion: " << x << ", " << y << endl;
+	// logstdout.d() << "Motion: " << x << ", " << y << endl;
 
 	if (bLMoving) {
 		vec3 &v3CurRot = (bWorldView) ? v3ViewRot : viewerProperty.face;
@@ -1311,10 +1444,15 @@ void ReshapeFunc(int width, int height)
 
 int main(int argc, char** argv)
 {
+	logstdout.enableLogLevel(logstdout.DEB, bDebug);
+
     glutInit(&argc, argv);
 
-    glutInitWindowSize(v2Resolution[0], v2Resolution[1]);
-    glutInitWindowPosition(10, 10);
+	v2WndPosition = vec2(std::max(0.0f, (glutGet(GLUT_SCREEN_WIDTH)-v2WndResolution[0])/2),
+						 std::max(0.0f, (glutGet(GLUT_SCREEN_HEIGHT)-v2WndResolution[1])/2));
+
+    glutInitWindowSize(v2WndResolution[0], v2WndResolution[1]);
+    glutInitWindowPosition(v2WndPosition[0], v2WndPosition[1]);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
     glutCreateWindow(sWindowTitle);
 	glutHideWindow();
@@ -1322,7 +1460,9 @@ int main(int argc, char** argv)
 	glewExperimental = GL_TRUE;
 	glewInit();
 
+	glutIgnoreKeyRepeat(bIgnoreKeyRepeat);
     glutKeyboardFunc(KeyFunc);
+	glutSpecialFunc(SpecialFunc);
 	glutMouseFunc(MouseFunc);
 	glutMotionFunc(MotionFunc);
     glutDisplayFunc(DisplayFunc);

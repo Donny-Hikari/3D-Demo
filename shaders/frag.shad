@@ -1,4 +1,4 @@
-#version 330
+#version 420
 
 in vec3 vs_fs_position;
 in vec3 vs_fs_normal;
@@ -17,8 +17,9 @@ uniform vec3 light_diffuse;
 uniform vec3 light_specular;
 uniform float light_shininess;
 
-uniform int enable_texture;
+uniform int texture_mode;
 uniform sampler2D texture_id;
+uniform samplerCube texture_cube_id;
 
 void main(void)
 {
@@ -54,9 +55,17 @@ void main(void)
         //vec3 final_effect = light_ambient + (1 - light_ambient) * diffuse_effect;
         //vec3 final_effect = diffuse_effect;
         vec3 final_effect = light_ambient + attenuation * (diffuse_effect + specular_effect);
-        if (enable_texture == 1)
-            fs_color = vec4(final_effect, 1.0f) * texture(texture_id, vs_fs_texCoord);
-        else
+        switch (texture_mode)
+        {
+        case 0:
             fs_color = vec4(final_effect, 1.0f) * vs_fs_color;
+            break;
+        case 1:
+            fs_color = vec4(final_effect, 1.0f) * texture(texture_id, vs_fs_texCoord);
+            break;
+        case 2:
+            fs_color = texture(texture_cube_id, vs_fs_position);
+            break;
+        }
     }
 }
