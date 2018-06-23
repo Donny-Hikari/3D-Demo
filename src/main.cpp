@@ -9,9 +9,9 @@
 #include <donny/logger.hpp>
 #include <boost/gil/extension/io/png_io.hpp>
 
-#include "../lib/vmathex.hpp"
-#include "../lib/donny/GLShaders.hpp"
-#include "../lib/donny/GLObjects.hpp"
+#include <vmathex.hpp>
+#include <donny/GLShaders.hpp>
+#include <donny/GLObjects.hpp>
 
 #include "standard3d.hpp"
 

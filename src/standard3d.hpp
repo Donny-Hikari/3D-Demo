@@ -8,8 +8,8 @@
 #include <GL/glew.h>
 #include <GL/glut.h>
 
-#include "../lib/vmathex.hpp"
-#include "../lib/donny/GLObjects.hpp"
+#include <vmathex.hpp>
+#include <donny/GLObjects.hpp>
 
 namespace Standard3D {
 
